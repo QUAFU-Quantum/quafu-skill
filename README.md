@@ -107,7 +107,7 @@ python tests/e2e.py --target Shenglian bell          # 真机只挑一两个
 claude plugin validate .                             # 插件清单
 ```
 
-改了模板或分析逻辑，就重跑 e2e 并更新 `references/algorithms.md` 里的实测数字。不要在任何文件里写凭证。
+改了模板或分析逻辑，就重跑 e2e 并更新 `references/algorithms.md` 里的实测数字。每次发布改动都要把 `.claude-plugin/plugin.json` 的 `version` 加一——Claude Code 和 Codex 按版本号判断要不要更新，版本号不变，用户那边的 `plugin update` 不会拿到新内容。不要在任何文件里写凭证。
 
 ## 许可
 

@@ -1,6 +1,6 @@
 {
   "name": "quafu",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "在 QUAFU 量子计算云平台上写并运行量子程序：网页登录、内置算法、异步取结果、分析与结果网页",
   "author": { "name": "QUAFU-Quantum" },
   "homepage": "https://github.com/QUAFU-Quantum/quafu-skill",
