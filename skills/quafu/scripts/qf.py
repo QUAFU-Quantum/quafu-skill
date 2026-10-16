@@ -19,6 +19,7 @@ import datetime
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
@@ -123,13 +124,25 @@ def cmd_show(a):
         print('……其余 %d 条省略（--limit 调）' % (len(circuits) - a.limit))
 
 
+def couplers(q, name):
+    """真机现在能用的双比特连接数（平台按校准与实测筛过的）。0 表示这台只能跑单比特线路。查不到为 None。"""
+    try:
+        return len(q.Client().metadata(name).get('coupling_map') or [])
+    except Exception:
+        return None
+
+
 def cmd_devices(a):
     q = quafu()
+    print('%-22s %-4s %-12s %-6s %-7s %-12s %s' % ('目标', '类型', '状态', '比特', '排队', 'shots', '可用双比特连接'))
     for d in q.devices():
         lim = d.get('limits') or {}
-        print('%-22s %-4s %-12s 比特 %-4s 排队 %-6s shots %s–%s(步长 %s)' % (
-            d['name'], d['kind'], d['status'], d['n_qubits'], d['queue'], lim.get('min_shots'),
-            lim.get('max_shots'), lim.get('shots_step')))
+        n = couplers(q, d['name']) if d['kind'] == 'real' and d['status'] == 'online' else None
+        cp = '' if d['kind'] != 'real' else ('—' if n is None else ('0（只能跑单比特线路）' if n == 0 else str(n)))
+        shots = '%s–%s' % (lim.get('min_shots'), lim.get('max_shots')) + (
+            '，%s 的倍数' % lim['shots_step'] if (lim.get('shots_step') or 1) > 1 else '')
+        print('%-22s %-4s %-12s %-6s %-7s %-12s %s' % (d['name'], d['kind'], d['status'], d['n_qubits'],
+                                                      d['queue'], shots, cp))
 
 
 def _target_info(q, target):
@@ -155,6 +168,11 @@ def cmd_run(a):
         sys.exit('没有叫 %s 的目标。先运行 qf.py devices 看看有哪些。' % a.target)
     if info['status'] not in ('online', 'standby', 'starting'):
         sys.exit('%s 现在是 %s 状态，交不了。换一台在线的（qf.py devices）。' % (a.target, info['status']))
+    if info['kind'] == 'real' and any(re.search(r'^(cx|cz|cy|swap|ccx|cp|cu1|crz)\b', ln.strip(), re.M)
+                                      for _, c in circuits for ln in c.splitlines()):
+        if couplers(q, a.target) == 0:
+            sys.exit('%s 现在没有可用的双比特连接，只能跑单比特线路。换一台（qf.py devices 看「可用双比特连接」）。'
+                     % a.target)
     lim = info.get('limits') or {}
     shots = a.shots or max(1024, lim.get('min_shots') or 1)
     step = lim.get('shots_step') or 1
@@ -241,7 +259,7 @@ def cmd_wait(a):
 
 def cmd_runs(a):
     d = runs_dir()
-    files = sorted(f for f in os.listdir(d) if f.endswith('.json'))
+    files = sorted(f for f in os.listdir(d) if f.endswith('.json') and not f.endswith('.analysis.json'))
     if not files:
         print('%s 下还没有记录。' % d)
         return
@@ -428,7 +446,10 @@ def analyze_record(rec):
             out['metrics']['readout_only_estimate'] = est
             got = it.get('good_mass_measured', 0)
             out['summary'].append('光是读出误差，就会让正确结果只剩约 %s；实测 %s，%s' % (
-                _pct(est), _pct(got), '和这个估计相当——这条线路里读出误差是主要的噪声来源。' if got > est - 0.02
+                _pct(est), _pct(got),
+                '比这个估计还高：校准表上的读出数据是校准那一刻测的，和这次运行不在同一时刻，这个估计只能当参考。'
+                if got > est + 0.05 else
+                '和这个估计相当——这条线路里读出误差是主要的噪声来源。' if got > est - 0.03
                 else '剩下的差距来自门操作误差和退相干。'))
     if real:
         out['summary'].append('这是在真机 %s 上跑的。' % out['backend'])
