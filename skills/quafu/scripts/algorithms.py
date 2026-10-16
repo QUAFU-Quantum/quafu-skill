@@ -204,8 +204,8 @@ TEMPLATES = {
     'qrng': dict(
         title='量子随机数', build=qrng, params={'n': 1}, qubits=1, circuits=1,
         targets=['sim', 'Dongling', 'Shenglian'],
-        idea='让比特处在 0 和 1 的等量叠加，再测量：每次结果由量子测量决定，没人能预测。',
-        expect='0 和 1 各约一半；每次运行给出 shots 个随机比特。真机上会有一两个百分点的偏向（读出误差）。',
+        idea='让比特处在 0 和 1 的等量叠加，再测量：每次结果由量子测量决定，没人能预测。n 个比特一次给出一个 n 位随机数。',
+        expect='0 和 1 各约一半；真机上常有几个百分点的偏向（读出误差）。平台只返回每种结果的次数、不返回逐次顺序，所以它演示的是「量子测量的随机性」，不能直接当密码学随机数源。',
         kind='qrng'),
     'rotation': dict(
         title='量子硬币转角度（单比特旋转扫描）', build=rotation, params={'points': 9}, qubits=1, circuits=9,

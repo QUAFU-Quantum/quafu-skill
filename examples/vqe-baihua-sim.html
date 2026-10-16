@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QUAFU 运行结果</title>
+<!-- 参考实现：深浅两色自适应的「仪器面板」风格。自包含、离线可开，不加载任何外部资源；数据由 qf.py page 填进 QUAFU_DATA 占位符。风格随便改。 -->
+<style>
+:root{
+  --bg:#f4f5fb;--surface:#ffffff;--ink:#141726;--ink-2:#454b66;--muted:#7a809c;--line:#e3e6f2;
+  --meas:#5b5bd6;--ideal:#9aa0bd;--fit:#5b5bd6;--exact:#d9480f;--cell:#5b5bd6;--glow:rgba(91,91,214,.18);
+  --radius:18px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#090b16;--surface:#11152a;--ink:#eef0ff;--ink-2:#b9bedb;--muted:#7d84a8;--line:#232947;
+  --meas:#8b8bff;--ideal:#5d6489;--fit:#8b8bff;--exact:#ff8a4c;--cell:#8b8bff;--glow:rgba(139,139,255,.22);
+}}
+:root[data-theme="dark"]{
+  --bg:#090b16;--surface:#11152a;--ink:#eef0ff;--ink-2:#b9bedb;--muted:#7d84a8;--line:#232947;
+  --meas:#8b8bff;--ideal:#5d6489;--fit:#8b8bff;--exact:#ff8a4c;--cell:#8b8bff;--glow:rgba(139,139,255,.22);
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}body{min-height:100vh}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,var(--glow),transparent 60%),var(--bg);background-attachment:fixed;color:var(--ink);
+  font:16px/1.65 "Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{width:min(1120px,100% - 32px);margin-inline:auto;padding:56px 0 40px}
+.head{margin-bottom:28px}
+.eyebrow{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--meas);font-weight:600}
+h1{font-size:clamp(28px,4.4vw,46px);line-height:1.15;margin:.3em 0 0;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600;color:var(--ink-2);margin:0 0 14px}
+.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px}
+.stat,.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px}
+.stat-value{font-size:clamp(34px,5vw,52px);font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat-label{margin-top:6px;color:var(--ink-2)}
+.stat-sub{font-size:13px;color:var(--muted)}
+.panel{margin-bottom:16px}
+.cols{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+.cols .panel{margin-bottom:0}
+.cols{margin-bottom:16px}
+@media (max-width:760px){.cols{grid-template-columns:1fr}.wrap{padding-top:32px}}
+.summary{margin:0;padding-left:1.2em}
+.summary li{margin:.35em 0;color:var(--ink)}
+.summary li::marker{color:var(--meas)}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;font-size:14px}
+.meta dt{color:var(--muted)}.meta dd{margin:0;word-break:break-all;font-variant-numeric:tabular-nums}
+.chart{width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ink-2);margin:-4px 0 8px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{display:inline-block;width:14px;height:10px;border-radius:3px}
+.sw-meas{background:var(--meas)}.sw-ideal{border:1.5px solid var(--ideal)}
+.sw-ideal-line{height:0;border-top:2px dashed var(--ideal);border-radius:0}
+.sw-fit{height:0;border-top:2px solid var(--fit);border-radius:0}
+.sw-exact{height:0;border-top:2px dotted var(--exact);border-radius:0}
+.sw-cell{background:var(--cell)}.sw-dot{width:10px;height:10px;border-radius:50%;background:var(--meas)}
+svg text{fill:var(--muted);font-size:12px;font-family:inherit}
+svg .mono,.mono{font-family:"JetBrains Mono","SFMono-Regular",Consolas,monospace}
+.grid{stroke:var(--line);stroke-width:1}.axis{stroke:var(--ideal);stroke-width:1}
+.ideal{fill:none;stroke:var(--ideal);stroke-width:1.5}
+.meas{fill:var(--meas)}
+.hit{fill:transparent}
+.line-ideal{fill:none;stroke:var(--ideal);stroke-width:2;stroke-dasharray:6 5}
+.line-fit{fill:none;stroke:var(--fit);stroke-width:2}
+.line-exact{stroke:var(--exact);stroke-width:2;stroke-dasharray:2 4}
+.dot{fill:var(--meas);stroke:var(--surface);stroke-width:2}
+.cell{fill:var(--cell)}
+.cell-label{fill:var(--ink);font-size:12px;font-variant-numeric:tabular-nums}.cell-label.on-dark{fill:#fff}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:500}
+.table-scroll{overflow-x:auto}
+.raw summary{cursor:pointer;color:var(--ink-2)}
+pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 0 0;color:var(--ink-2)}
+.foot{text-align:center;color:var(--muted);font-size:13px;margin-top:28px}
+.tip{position:fixed;left:0;top:0;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--ink);color:var(--surface);
+  padding:8px 12px;border-radius:10px;font-size:13px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:9}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head">
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="title">QUAFU 运行结果</h1>
+  </header>
+  <section class="hero" id="hero"></section>
+  <section class="panel">
+    <h2 id="chart-title">结果</h2>
+    <div class="chart" id="chart"></div>
+  </section>
+  <section class="panel" hidden>
+    <h2 id="chart2-title"></h2>
+    <div class="chart" id="chart2"></div>
+  </section>
+  <section class="cols">
+    <div class="panel">
+      <h2>这说明了什么</h2>
+      <ul class="summary" id="summary"></ul>
+    </div>
+    <div class="panel">
+      <h2>这次运行</h2>
+      <dl class="meta" id="meta"></dl>
+    </div>
+  </section>
+  <section class="panel" id="readout" hidden>
+    <h2>测量用到的物理比特（当次校准数据）</h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>经典位</th><th>物理比特</th><th>0 读对</th><th>1 读对</th><th>T1</th><th>T2</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+  <details class="panel raw">
+    <summary>原始计数（第一条线路）</summary>
+    <pre id="raw"></pre>
+  </details>
+  <footer class="foot">由 QUAFU 量子计算云平台运行 · 本页离线可开，不加载任何外部资源</footer>
+</main>
+<script>window.QUAFU_DATA = {"job_id": "（示例，已隐去）", "template": "vqe-h2", "title": "VQE：算氢分子的基态能量", "kind": "vqe", "target": "Baihua-sim", "backend": "Baihua-sim", "params": {"points": 9}, "shots": 1024, "submitted_at": "2026-10-16T07:11:17-07:00", "finished_at": "2026-10-16T07:11:47-07:00", "items": [{"label": {"theta": 0.0, "basis": "Z"}, "ideal": {"10": 1.0}, "measured": {"11": 0.01953125, "00": 0.0087890625, "10": 0.9716796875}, "counts": {"11": 20, "00": 9, "10": 995}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.0283203125, "fidelity": 0.9716796875000001, "good_states": ["10"], "good_mass_measured": 0.9716796875, "good_mass_ideal": 1.0}, {"label": {"theta": 0.0, "basis": "X"}, "ideal": {"00": 0.2499999999999999, "01": 0.2499999999999999, "10": 0.2499999999999999, "11": 0.2499999999999999}, "measured": {"01": 0.2666015625, "00": 0.2744140625, "10": 0.2265625, "11": 0.232421875}, "counts": {"01": 273, "00": 281, "10": 232, "11": 238}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.041015625, "fidelity": 0.9982682843710949, "good_states": ["00", "01", "10", "11"], "good_mass_measured": 1.0, "good_mass_ideal": 0.9999999999999996}, {"label": {"theta": 0.6981317007977318, "basis": "Z"}, "ideal": {"01": 0.11697777844059716, "10": 0.8830222215594029}, "measured": {"11": 0.005859375, "00": 0.029296875, "10": 0.83984375, "01": 0.125}, "counts": {"11": 6, "00": 30, "10": 860, "01": 128}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.043178471559402874, "fidelity": 0.9644905344883997, "good_states": ["01", "10"], "good_mass_measured": 0.96484375, "good_mass_ideal": 1.0}, {"label": {"theta": 0.6981317007977318, "basis": "X"}, "ideal": {"00": 0.41069690242168605, "01": 0.08930309757831378, "10": 0.08930309757831378, "11": 0.41069690242168605}, "measured": {"01": 0.0966796875, "11": 0.384765625, "10": 0.1015625, "00": 0.4169921875}, "counts": {"01": 99, "11": 394, "10": 104, "00": 427}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.025931277421686216, "fidelity": 0.9990130571309201, "good_states": ["00", "01", "10", "11"], "good_mass_measured": 1.0, "good_mass_ideal": 0.9999999999999997}, {"label": {"theta": 1.3962634015954636, "basis": "Z"}, "ideal": {"01": 0.41317591116630653, "10": 0.5868240888336936}, "measured": {"11": 0.0146484375, "01": 0.3955078125, "00": 0.01953125, "10": 0.5703125}, "counts": {"11": 15, "01": 405, "00": 20, "10": 584}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.03417968750000008, "fidelity": 0.9658068716973497, "good_states": ["01", "10"], "good_mass_measured": 0.9658203125, "good_mass_ideal": 1.0000000000000002}, {"label": {"theta": 1.3962634015954636, "basis": "X"}, "ideal": {"00": 0.4962019382530318, "01": 0.003798061746968118, "10": 0.003798061746968118, "11": 0.4962019382530318}, "measured": {"01": 0.0205078125, "10": 0.0205078125, "00": 0.4736328125, "11": 0.4853515625}, "counts": {"01": 21, "10": 21, "00": 485, "11": 497}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.03341950150606371, "fidelity": 0.986414208415584, "good_states": ["00", "11"], "good_mass_measured": 0.958984375, "good_mass_ideal": 0.9924038765060637}, {"label": {"theta": 2.0943951023931953, "basis": "Z"}, "ideal": {"01": 0.7499999999999153, "10": 0.2500000000000847}, "measured": {"11": 0.025390625, "00": 0.0244140625, "10": 0.234375, "01": 0.7158203125}, "counts": {"11": 26, "00": 25, "10": 240, "01": 733}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.0498046875, "fidelity": 0.9501811140859051, "good_states": ["01", "10"], "good_mass_measured": 0.9501953125, "good_mass_ideal": 1.0}, {"label": {"theta": 2.0943951023931953, "basis": "X"}, "ideal": {"00": 0.466506350946134, "01": 0.033493649053865884, "10": 0.033493649053865884, "11": 0.466506350946134}, "measured": {"01": 0.052734375, "11": 0.431640625, "10": 0.0576171875, "00": 0.4580078125}, "counts": {"01": 54, "11": 442, "10": 59, "00": 469}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.043364264392268134, "fidelity": 0.993867668266711, "good_states": ["00", "11"], "good_mass_measured": 0.8896484375, "good_mass_ideal": 0.933012701892268}, {"label": {"theta": 2.792526803190927, "basis": "Z"}, "ideal": {"01": 0.9698463103929665, "10": 0.030153689607033376}, "measured": {"10": 0.02734375, "00": 0.009765625, "11": 0.0341796875, "01": 0.9287109375}, "counts": {"10": 28, "00": 10, "11": 35, "01": 951}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.04394531249999996, "fidelity": 0.9560344657031632, "good_states": ["01"], "good_mass_measured": 0.9287109375, "good_mass_ideal": 0.9698463103929665}, {"label": {"theta": 2.792526803190927, "basis": "X"}, "ideal": {"00": 0.33550503583139996, "01": 0.1644949641685998, "10": 0.1644949641685998, "11": 0.33550503583139996}, "measured": {"00": 0.3095703125, "10": 0.1728515625, "01": 0.1826171875, "11": 0.3349609375}, "counts": {"00": 317, "10": 177, "01": 187, "11": 343}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.02647882166280016, "fidelity": 0.9989016188685425, "good_states": ["00", "01", "10", "11"], "good_mass_measured": 1.0, "good_mass_ideal": 0.9999999999999996}, {"label": {"theta": 3.490658503988659, "basis": "Z"}, "ideal": {"01": 0.9698463103928959, "10": 0.03015368960710412}, "measured": {"11": 0.033203125, "00": 0.013671875, "10": 0.0283203125, "01": 0.9248046875}, "counts": {"11": 34, "00": 14, "10": 29, "01": 947}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.04687500000000003, "fidelity": 0.9531234071415966, "good_states": ["01"], "good_mass_measured": 0.9248046875, "good_mass_ideal": 0.9698463103928959}, {"label": {"theta": 3.490658503988659, "basis": "X"}, "ideal": {"00": 0.1644949641685027, "01": 0.3355050358314972, "10": 0.3355050358314972, "11": 0.1644949641685027}, "measured": {"11": 0.19921875, "01": 0.3330078125, "10": 0.310546875, "00": 0.1572265625}, "counts": {"11": 204, "01": 341, "10": 318, "00": 161}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.03472378583149721, "fidelity": 0.9977708587982886, "good_states": ["00", "01", "10", "11"], "good_mass_measured": 1.0, "good_mass_ideal": 0.9999999999999998}, {"label": {"theta": 4.1887902047863905, "basis": "Z"}, "ideal": {"01": 0.7500000000001693, "10": 0.24999999999983058}, "measured": {"11": 0.025390625, "00": 0.0107421875, "10": 0.2392578125, "01": 0.724609375}, "counts": {"11": 26, "00": 11, "10": 245, "01": 742}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.036132812499999944, "fidelity": 0.9638631377512528, "good_states": ["01", "10"], "good_mass_measured": 0.9638671875, "good_mass_ideal": 0.9999999999999999}, {"label": {"theta": 4.1887902047863905, "basis": "X"}, "ideal": {"00": 0.03349364905393923, "01": 0.46650635094606063, "10": 0.46650635094606063, "11": 0.03349364905393923}, "measured": {"11": 0.0576171875, "00": 0.056640625, "10": 0.435546875, "01": 0.4501953125}, "counts": {"11": 59, "00": 58, "10": 446, "01": 461}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.047270514392121404, "fidelity": 0.9930610591018277, "good_states": ["01", "10"], "good_mass_measured": 0.8857421875, "good_mass_ideal": 0.9330127018921213}, {"label": {"theta": 4.886921905584122, "basis": "Z"}, "ideal": {"01": 0.4131759111665954, "10": 0.5868240888334045}, "measured": {"11": 0.009765625, "01": 0.4140625, "00": 0.0263671875, "10": 0.5498046875}, "counts": {"11": 10, "01": 424, "00": 27, "10": 563}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.03701940133340456, "fidelity": 0.9636010901425522, "good_states": ["01", "10"], "good_mass_measured": 0.9638671875, "good_mass_ideal": 1.0}, {"label": {"theta": 4.886921905584122, "basis": "X"}, "ideal": {"00": 0.0037980617469426446, "01": 0.4962019382530572, "10": 0.4962019382530572, "11": 0.0037980617469426446}, "measured": {"11": 0.0224609375, "01": 0.462890625, "00": 0.017578125, "10": 0.4970703125}, "counts": {"11": 23, "01": 474, "00": 18, "10": 509}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.033311313253057355, "fidelity": 0.9866448347817995, "good_states": ["01", "10"], "good_mass_measured": 0.9599609375, "good_mass_ideal": 0.9924038765061144}, {"label": {"theta": 5.585053606381854, "basis": "Z"}, "ideal": {"01": 0.11697777844046427, "10": 0.8830222215595356}, "measured": {"11": 0.0087890625, "01": 0.123046875, "00": 0.037109375, "10": 0.8310546875}, "counts": {"11": 9, "01": 126, "00": 38, "10": 851}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.05196753405953566, "fidelity": 0.953783559293839, "good_states": ["01", "10"], "good_mass_measured": 0.9541015625, "good_mass_ideal": 0.9999999999999999}, {"label": {"theta": 5.585053606381854, "basis": "X"}, "ideal": {"00": 0.08930309757839297, "01": 0.4106969024216068, "10": 0.4106969024216068, "11": 0.08930309757839297}, "measured": {"11": 0.1064453125, "01": 0.3984375, "10": 0.3974609375, "00": 0.09765625}, "counts": {"11": 109, "01": 408, "10": 407, "00": 100}, "shots": 1024, "backend": "Baihua-sim", "status": "Finished", "tvd": 0.02549536734321381, "fidelity": 0.9988603127491721, "good_states": ["00", "01", "10", "11"], "good_mass_measured": 1.0, "good_mass_ideal": 0.9999999999999996}], "summary": ["拟合出的最低能量 -1.1054 Ha（θ≈3.37），精确答案 -1.1373 Ha，差 31.9 毫 Ha。", "「化学精度」是 1.6 毫 Ha；没达到很正常——噪声会让能量偏高，有限的测量次数也带来起伏。", "读出（测量时看错）有多大影响：c[0]→Q69：0 读对 98.1%、1 读对 96.4%；c[1]→Q70：0 读对 99.5%、1 读对 99.0%。"], "metrics": {"curve": [{"theta": 0.0, "energy": 0.4540460347566204, "ideal": 0.47475070261871694}, {"theta": 0.698131701, "energy": 0.35620368880210446, "ideal": 0.4048516923796687}, {"theta": 1.396263402, "energy": -0.016683406254069943, "ideal": -0.004739481459004269}, {"theta": 2.094395102, "energy": -0.5644188483388307, "ideal": -0.5623705565603297}, {"theta": 2.792526803, "energy": -0.9871906124069408, "ideal": -1.007119755504755}, {"theta": 3.490658504, "energy": -1.087618067729013, "ideal": -1.1308839852692647}, {"theta": 4.188790205, "energy": -0.8478040062850517, "ideal": -0.8757525872614006}, {"theta": 4.886921906, "energy": -0.38034808633063555, "ideal": -0.3611043780780775}, {"theta": 5.585053606, "energy": 0.13425146733985727, "ideal": 0.1722510255258154}], "fit": {"a": -0.3266179818518421, "b": 0.759245893475741, "c": 0.17346108736761667, "min": -1.1054267360338508, "argmin": 3.3662026432166625}, "exact": -1.1373060357534013, "best_point": {"theta": 3.490658504, "energy": -1.087618067729013, "ideal": -1.1308839852692647}}, "readout": {"0": {"physical_qubit": 69, "calibration_id": "36bb697ccd5bc8be", "f0": 0.981, "f1": 0.964, "t1_us": 52.21, "t2_us": 25.331}, "1": {"physical_qubit": 70, "calibration_id": "36bb697ccd5bc8be", "f0": 0.995, "f1": 0.99, "t1_us": 61.364, "t2_us": 20.895}}};</script>
+<script>
+(function () {
+  'use strict';
+  var D = window.QUAFU_DATA;
+  var $ = function (s) { return document.querySelector(s); };
+  var NS = 'http://www.w3.org/2000/svg';
+  var pct = function (x, d) { return (100 * x).toFixed(d == null ? 1 : d) + '%'; };
+  var css = function (name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); };
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function h(tag, cls, text, parent) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  if (!D) { $('#title').textContent = '没有数据：用 qf.py page 生成这个页面'; return; }
+
+  // ── 提示框 ───────────────────────────────────────────
+  var tip = h('div', 'tip', null, document.body);
+  function showTip(evt, html) {
+    tip.innerHTML = html; tip.style.opacity = 1;
+    var x = evt.clientX + 14, y = evt.clientY + 14, r = tip.getBoundingClientRect();
+    if (x + r.width > innerWidth - 8) x = evt.clientX - r.width - 14;
+    if (y + r.height > innerHeight - 8) y = evt.clientY - r.height - 14;
+    tip.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+  }
+  function hideTip() { tip.style.opacity = 0; }
+  function hover(node, html) {
+    node.addEventListener('mousemove', function (e) { showTip(e, html); });
+    node.addEventListener('mouseleave', hideTip);
+    node.style.cursor = 'default';
+  }
+
+  // ── 头部与大数字 ─────────────────────────────────────
+  var real = !/sim/.test(String(D.target));
+  $('#title').textContent = D.title || D.template;
+  $('#eyebrow').textContent = (real ? '真机 · ' : '模拟器 · ') + (D.backend || D.target);
+  var meta = [['任务组', D.job_id], ['目标', D.target], ['每条线路测量次数', D.shots],
+              ['提交', (D.submitted_at || '').replace('T', ' ').slice(0, 16)],
+              ['完成', (D.finished_at || '').replace('T', ' ').slice(0, 16)]];
+  if (D.params && Object.keys(D.params).length) meta.push(['参数', JSON.stringify(D.params)]);
+  var dl = $('#meta');
+  meta.forEach(function (m) { h('dt', null, m[0], dl); h('dd', null, String(m[1] == null ? '—' : m[1]), dl); });
+
+  var M = D.metrics || {}, hero = $('#hero');
+  function heroStat(value, label, sub) {
+    var c = h('div', 'stat', null, hero);
+    h('div', 'stat-value', value, c); h('div', 'stat-label', label, c);
+    if (sub) h('div', 'stat-sub', sub, c);
+  }
+  if (D.kind === 'rotation') {
+    heroStat(M.contrast != null ? M.contrast.toFixed(2) : '—', '对比度', '理想为 1.00');
+    heroStat(pct(M.p1_at_0 || 0), 'θ=0 时测到 1', '理想 0%');
+    heroStat(pct(M.p1_at_pi || 0), 'θ=π 时测到 1', '理想 100%');
+  } else if (D.kind === 'vqe') {
+    var f = M.fit || {};
+    heroStat(f.min != null ? f.min.toFixed(4) : '—', '拟合最低能量（Ha）', '精确 ' + M.exact.toFixed(4));
+    heroStat(f.min != null ? (1000 * (f.min - M.exact)).toFixed(1) : '—', '偏差（毫 Ha）', '化学精度 1.6');
+  } else if (D.kind === 'qaoa') {
+    var b = M.best || {};
+    heroStat(b.cut != null ? b.cut.toFixed(2) : '—', '最好一组角度的平均割值', '随机 2 · 最优 4');
+    heroStat(pct(b.p_max || 0), '直接测到最优分法', '0101 或 1010');
+  } else {
+    heroStat(M.fidelity != null ? M.fidelity.toFixed(3) : '—', '与理想分布的相似度', '1 = 完全一致');
+    if (M.good_mass != null) heroStat(pct(M.good_mass), '落在理想结果上', '统计起伏 ±' + pct(M.stat_noise / 2));
+    if (M.readout_only_estimate != null) heroStat(pct(M.readout_only_estimate), '只算读出误差的估计', '来自当次校准数据');
+  }
+
+  var ul = $('#summary');
+  (D.summary || []).forEach(function (s) { h('li', null, s, ul); });
+
+  // ── 画图工具 ─────────────────────────────────────────
+  function frame(host, H) {
+    host.innerHTML = '';
+    var W = Math.max(240, host.clientWidth);
+    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, role: 'img' }, host);
+    return { svg: svg, W: W, H: H };
+  }
+  function lin(d0, d1, r0, r1) { return function (v) { return r0 + (v - d0) / (d1 - d0 || 1) * (r1 - r0); }; }
+  function axisY(g, y, x0, x1, ticks, fmt) {
+    ticks.forEach(function (t) {
+      el('line', { x1: x0, x2: x1, y1: y(t), y2: y(t), 'class': 'grid' }, g);
+      var tx = el('text', { x: x0 - 8, y: y(t) + 4, 'text-anchor': 'end', 'class': 'tick' }, g);
+      tx.textContent = fmt(t);
+    });
+  }
+  function legend(host, items) {
+    var lg = h('div', 'legend', null, null);
+    items.forEach(function (it) {
+      var s = h('span', null, null, lg);
+      h('i', 'sw ' + it.cls, null, s); s.appendChild(document.createTextNode(it.text));
+    });
+    host.parentNode.insertBefore(lg, host);
+  }
+  function piLabel(v) {
+    var k = Math.round(v / Math.PI * 4);
+    var map = { 0: '0', 1: 'π/4', 2: 'π/2', 3: '3π/4', 4: 'π', 5: '5π/4', 6: '3π/2', 7: '7π/4', 8: '2π' };
+    return map[k] || v.toFixed(2);
+  }
+
+  // 分布柱状图：理想（空心框）对实测（实心）
+  function bars(host, ideal, meas, counts) {
+    var keys = Object.keys(Object.assign({}, ideal, meas)).sort();
+    if (keys.length > 16) {
+      keys.sort(function (a, b) { return (meas[b] || 0) + (ideal[b] || 0) - (meas[a] || 0) - (ideal[a] || 0); });
+      keys = keys.slice(0, 16).sort();
+    }
+    var narrow = (host.clientWidth - 60) / keys.length < 34;
+    var F = frame(host, narrow ? 330 : 300), g = F.svg, L = 48, R = 12, T = 14, B = narrow ? 64 : 34;
+    var vmax = Math.max.apply(null, keys.map(function (k) { return Math.max(ideal[k] || 0, meas[k] || 0); }));
+    vmax = Math.min(1, Math.ceil(vmax * 10 + 0.0001) / 10);
+    var y = lin(0, vmax, F.H - B, T), band = (F.W - L - R) / keys.length;
+    var ticks = []; for (var t = 0; t <= vmax + 1e-9; t += vmax > 0.5 ? 0.25 : 0.1) ticks.push(t);
+    axisY(g, y, L, F.W - R, ticks, function (t) { return Math.round(t * 100) + '%'; });
+    var bw = Math.min(36, band * 0.36);
+    keys.forEach(function (k, i) {
+      var cx = L + band * (i + 0.5), pi = ideal[k] || 0, pm = meas[k] || 0;
+      var base = F.H - B;
+      if (pi > 0) el('rect', { x: cx - bw - 1, y: y(pi), width: bw, height: Math.max(0.5, base - y(pi)), rx: 3, 'class': 'ideal' }, g);
+      if (pm > 0) el('rect', { x: cx + 1, y: y(pm), width: bw, height: Math.max(0.5, base - y(pm)), rx: 3, 'class': 'meas' }, g);
+      var lab = narrow
+        ? el('text', { x: cx + 4, y: F.H - B + 10, 'text-anchor': 'end', transform: 'rotate(-90 ' + (cx + 4) + ' ' + (F.H - B + 10) + ')', 'class': 'tick mono' }, g)
+        : el('text', { x: cx, y: F.H - 12, 'text-anchor': 'middle', 'class': 'tick mono' }, g);
+      lab.textContent = k;
+      var hit = el('rect', { x: cx - band / 2, y: T, width: band, height: base - T, 'class': 'hit' }, g);
+      hover(hit, '<b class="mono">' + k + '</b><br>理想 ' + pct(pi) + '<br>实测 ' + pct(pm) +
+        (counts && counts[k] != null ? '（' + counts[k] + ' 次）' : ''));
+    });
+    el('line', { x1: L, x2: F.W - R, y1: F.H - B, y2: F.H - B, 'class': 'axis' }, g);
+  }
+
+  // 折线 + 点：x 为角度
+  function curve(host, opts) {
+    var F = frame(host, 320), g = F.svg, L = 56, R = 16, T = 16, B = 36;
+    var x = lin(opts.x0, opts.x1, L, F.W - R), y = lin(opts.y0, opts.y1, F.H - B, T);
+    axisY(g, y, L, F.W - R, opts.yticks, opts.yfmt);
+    opts.xticks.forEach(function (t) {
+      var tx = el('text', { x: x(t), y: F.H - 12, 'text-anchor': 'middle', 'class': 'tick' }, g);
+      tx.textContent = piLabel(t);
+    });
+    el('line', { x1: L, x2: F.W - R, y1: F.H - B, y2: F.H - B, 'class': 'axis' }, g);
+    (opts.hlines || []).forEach(function (hl) {
+      el('line', { x1: L, x2: F.W - R, y1: y(hl.v), y2: y(hl.v), 'class': hl.cls }, g);
+      var tx = el('text', { x: F.W - R, y: y(hl.v) - 6, 'text-anchor': 'end', 'class': 'tick' }, g);
+      tx.textContent = hl.text;
+    });
+    (opts.lines || []).forEach(function (ln) {
+      var d = '';
+      for (var i = 0; i <= 200; i++) {
+        var xv = opts.x0 + (opts.x1 - opts.x0) * i / 200;
+        d += (i ? 'L' : 'M') + x(xv).toFixed(1) + ',' + y(ln.f(xv)).toFixed(1);
+      }
+      el('path', { d: d, 'class': ln.cls }, g);
+    });
+    (opts.points || []).forEach(function (p) {
+      el('circle', { cx: x(p.x), cy: y(p.y), r: 5, 'class': 'dot' }, g);
+      var hit = el('circle', { cx: x(p.x), cy: y(p.y), r: 14, 'class': 'hit' }, g);
+      hover(hit, p.tip);
+    });
+  }
+
+  function fitSin(xs, ys) {
+    var n = xs.length; if (n < 3) return null;
+    var A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], v = [0, 0, 0];
+    xs.forEach(function (x, k) {
+      var r = [1, Math.cos(x), Math.sin(x)];
+      for (var i = 0; i < 3; i++) { v[i] += r[i] * ys[k]; for (var j = 0; j < 3; j++) A[i][j] += r[i] * r[j]; }
+    });
+    for (var i = 0; i < 3; i++) {
+      for (var k = 0; k < 3; k++) if (k !== i) {
+        var f = A[k][i] / A[i][i];
+        for (var j = 0; j < 3; j++) A[k][j] -= f * A[i][j];
+        v[k] -= f * v[i];
+      }
+    }
+    var a = v[0] / A[0][0], b = v[1] / A[1][1], c = v[2] / A[2][2];
+    return function (x) { return a + b * Math.cos(x) + c * Math.sin(x); };
+  }
+
+  // 热力图：QAOA 的 (γ, β) 网格
+  function heat(host, grid) {
+    var gs = Array.from(new Set(grid.map(function (g) { return g.gamma; }))).sort(function (a, b) { return a - b; });
+    var bs = Array.from(new Set(grid.map(function (g) { return g.beta; }))).sort(function (a, b) { return a - b; });
+    var F = frame(host, 320), g = F.svg, L = host.clientWidth < 500 ? 48 : 64, R = 8, T = 12, B = 40;
+    var cw = (F.W - L - R) / bs.length, ch = (F.H - T - B) / gs.length;
+    var cuts = grid.map(function (c) { return c.cut; }).concat(grid.map(function (c) { return c.ideal; }));
+    var lo = Math.min.apply(null, cuts), hi = Math.max.apply(null, cuts);
+    grid.forEach(function (c) {
+      var i = gs.indexOf(c.gamma), j = bs.indexOf(c.beta);
+      var t = Math.max(0, Math.min(1, (c.cut - lo) / (hi - lo)));
+      var r = el('rect', { x: L + j * cw + 1, y: T + (gs.length - 1 - i) * ch + 1, width: cw - 2, height: ch - 2, rx: 4,
+        'class': 'cell', style: 'fill-opacity:' + (0.12 + 0.88 * t).toFixed(3) }, g);
+      var tx = el('text', { x: L + (j + 0.5) * cw, y: T + (gs.length - 1 - i + 0.5) * ch + 4, 'text-anchor': 'middle',
+        'class': 'cell-label' + (t > 0.55 ? ' on-dark' : '') }, g);
+      tx.textContent = c.cut.toFixed(2);
+      hover(r, 'γ = ' + c.gamma.toFixed(3) + '，β = ' + c.beta.toFixed(3) + '<br>实测平均割值 <b>' + c.cut.toFixed(2) +
+        '</b><br>理想 ' + c.ideal.toFixed(2) + '<br>测到最优分法 ' + pct(c.p_max));
+      hover(tx, 'γ = ' + c.gamma.toFixed(3) + '，β = ' + c.beta.toFixed(3) + '<br>实测平均割值 <b>' + c.cut.toFixed(2) + '</b><br>理想 ' + c.ideal.toFixed(2));
+    });
+    gs.forEach(function (v, i) {
+      var tx = el('text', { x: L - 8, y: T + (gs.length - 1 - i + 0.5) * ch + 4, 'text-anchor': 'end', 'class': 'tick' }, g);
+      tx.textContent = 'γ ' + v.toFixed(2);
+    });
+    bs.forEach(function (v, j) {
+      var tx = el('text', { x: L + (j + 0.5) * cw, y: F.H - 14, 'text-anchor': 'middle', 'class': 'tick' }, g);
+      tx.textContent = 'β ' + v.toFixed(2);
+    });
+  }
+
+  // ── 按类型出图 ───────────────────────────────────────
+  var main = $('#chart'), second = $('#chart2');
+  function draw() {
+    hideTip();
+    var items = (D.items || []).filter(function (it) { return it.measured && Object.keys(it.measured).length; });
+    if (!items.length) { main.textContent = '没有成功的线路。'; return; }
+    if (D.kind === 'rotation') {
+      $('#chart-title').textContent = '转的角度 θ 与测到 1 的概率';
+      curve(main, { x0: 0, x1: Math.PI, y0: 0, y1: 1, yticks: [0, .25, .5, .75, 1],
+        yfmt: function (t) { return Math.round(t * 100) + '%'; }, xticks: [0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4, Math.PI],
+        lines: [{ cls: 'line-ideal', f: function (t) { return Math.pow(Math.sin(t / 2), 2); } },
+                { cls: 'line-fit', f: function (t) { return M.offset - (M.contrast / 2) * Math.cos(t); } }],
+        points: (M.points || []).map(function (p) {
+          return { x: p.theta, y: p.p1, tip: 'θ = ' + piLabel(p.theta) + '<br>实测 ' + pct(p.p1) + '<br>理想 ' + pct(p.ideal) };
+        }) });
+    } else if (D.kind === 'vqe') {
+      $('#chart-title').textContent = '试探态角度 θ 与氢分子能量';
+      var cv = M.curve || [], ys = cv.map(function (p) { return p.energy; }).concat(cv.map(function (p) { return p.ideal; }));
+      var fi = fitSin(cv.map(function (p) { return p.theta; }), cv.map(function (p) { return p.ideal; }));
+      var fm = fitSin(cv.map(function (p) { return p.theta; }), cv.map(function (p) { return p.energy; }));
+      for (var s = 0; s <= 64; s++) { var xv = 2 * Math.PI * s / 64; if (fi) ys.push(fi(xv)); if (fm) ys.push(fm(xv)); }
+      var y0 = Math.floor(Math.min.apply(null, ys.concat([M.exact])) * 5) / 5, y1 = Math.ceil(Math.max.apply(null, ys) * 5) / 5;
+      var tk = []; for (var t = y0; t <= y1 + 1e-9; t += 0.2) tk.push(t);
+      curve(main, { x0: 0, x1: 2 * Math.PI, y0: y0, y1: y1, yticks: tk, yfmt: function (t) { return (Math.abs(t) < 1e-9 ? 0 : t).toFixed(1); },
+        xticks: [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2, 2 * Math.PI],
+        hlines: [{ v: M.exact, cls: 'line-exact', text: '精确基态 ' + M.exact.toFixed(4) + ' Ha' }],
+        lines: [fi && { cls: 'line-ideal', f: fi }, fm && { cls: 'line-fit', f: fm }].filter(Boolean),
+        points: cv.map(function (p) {
+          return { x: p.theta, y: p.energy, tip: 'θ = ' + p.theta.toFixed(2) + '<br>实测能量 ' + p.energy.toFixed(4) + ' Ha<br>理想 ' + p.ideal.toFixed(4) + ' Ha' };
+        }) });
+    } else if (D.kind === 'qaoa') {
+      $('#chart-title').textContent = '每组角度 (γ, β) 下的平均割值';
+      heat(main, M.grid || []);
+      var b = M.best, best = items.filter(function (it) { return it.label.gamma === b.gamma && it.label.beta === b.beta; })[0];
+      if (best && second) {
+        second.parentNode.hidden = false;
+        $('#chart2-title').textContent = '最好那组角度下，每种分法出现的概率';
+        bars(second, best.ideal, best.measured, best.counts);
+      }
+    } else {
+      $('#chart-title').textContent = '每种结果出现的概率：理想 vs 实测';
+      bars(main, items[0].ideal || {}, items[0].measured, items[0].counts);
+    }
+  }
+  var legends = { rotation: [{ cls: 'sw-ideal-line', text: '理想 sin²(θ/2)' }, { cls: 'sw-dot', text: '实测' }, { cls: 'sw-fit', text: '实测拟合' }],
+    vqe: [{ cls: 'sw-ideal-line', text: '理想' }, { cls: 'sw-dot', text: '实测' }, { cls: 'sw-fit', text: '实测拟合' }, { cls: 'sw-exact', text: '精确基态' }],
+    qaoa: [{ cls: 'sw-cell', text: '颜色越深，平均割值越大' }] };
+  legend(main, legends[D.kind] || [{ cls: 'sw-ideal', text: '理想' }, { cls: 'sw-meas', text: '实测' }]);
+  if (D.kind === 'qaoa' && second) legend(second, [{ cls: 'sw-ideal', text: '理想' }, { cls: 'sw-meas', text: '实测' }]);
+
+  // ── 读出数据与线路 ───────────────────────────────────
+  var ro = D.readout || {}, rk = Object.keys(ro);
+  if (rk.length && $('#readout')) {
+    $('#readout').hidden = false;
+    var tb = $('#readout tbody');
+    rk.sort().forEach(function (c) {
+      var r = ro[c], tr = h('tr', null, null, tb);
+      ['c[' + c + ']', 'Q' + r.physical_qubit, r.f0 != null ? pct(r.f0) : '—', r.f1 != null ? pct(r.f1) : '—',
+       r.t1_us != null ? r.t1_us + ' μs' : '—', r.t2_us != null ? r.t2_us + ' μs' : '—'].forEach(function (v) { h('td', null, v, tr); });
+    });
+  }
+  var first = (D.items || [])[0];
+  if (first && $('#raw')) {
+    $('#raw').textContent = JSON.stringify(first.counts || {}, null, 1);
+  }
+
+  draw();
+  var rt; addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(draw, 120); });
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "quafu",
+  "owner": { "name": "QUAFU-Quantum" },
+  "metadata": { "description": "QUAFU 量子计算云平台的 agent skill" },
+  "plugins": [
+    {
+      "name": "quafu",
+      "source": "./",
+      "description": "在 QUAFU 量子计算云平台上写并运行量子程序：网页登录、内置算法、异步取结果、分析与结果网页"
+    }
+  ]
+}

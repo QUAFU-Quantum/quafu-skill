@@ -361,10 +361,16 @@ def analyze_record(rec):
         if kind == 'qrng':
             p1 = sum(v for k, v in it['measured'].items() if k.endswith('1'))
             out['metrics']['p1_c0'] = p1
+            biased = abs(p1 - 0.5) > 3 * 0.5 / math.sqrt(shots)
             out['summary'].append('c[0] 测到 1 的比例 %s，理想 50%%；偏离 %s，统计起伏约 ±%s。%s' % (
                 _pct(p1), _pct(abs(p1 - 0.5)), _pct(0.5 / math.sqrt(shots)),
-                '偏离明显大于统计起伏，主要是读出误差（真机把 1 看成 0 的概率通常比反过来大）。' if abs(
-                    p1 - 0.5) > 3 * 0.5 / math.sqrt(shots) else '在统计起伏之内，看不出偏向。'))
+                '偏离明显大于统计起伏：这台机器的这个比特有偏向。'
+                if biased else '在统计起伏之内，看不出偏向。'))
+            r0 = (rec.get('readout') or {}).get('0') or {}
+            if biased and r0.get('f0') and r0.get('f1'):
+                exp1 = 0.5 * (1 - r0['f0']) + 0.5 * r0['f1']
+                out['summary'].append('按当次校准数据，Q%s 把 0 看成 1 的概率 %s、把 1 看成 0 的概率 %s，光读出误差就会让 1 的比例变成约 %s。' % (
+                    r0['physical_qubit'], _pct(1 - r0['f0']), _pct(1 - r0['f1']), _pct(exp1)))
     elif kind == 'rotation':
         pts = []
         for it in ok:
