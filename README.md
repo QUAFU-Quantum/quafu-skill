@@ -79,7 +79,7 @@ Claude Code 里也可以用 `/quafu:quafu` 显式调用。
 
 完整数字（含 Shenglian-sim、等待时间）见 [skills/quafu/references/algorithms.md](skills/quafu/references/algorithms.md)。
 
-结果网页示例（下载后双击打开，离线可看）：[真机贝尔态](examples/bell-shenglian.html)、[真机单比特旋转](examples/rotation-dongling.html)、[VQE](examples/vqe-baihua-sim.html)、[QAOA](examples/qaoa-baihua-sim.html)。
+结果网页示例（下载后双击打开，离线可看）：[真机贝尔态](examples/bell-shenglian.html)、[贝尔态：理想 / 带噪 / 真机对比](examples/bell-compare.html)、[单比特旋转：理想 / 带噪 / 真机对比](examples/rotation-compare.html)、[VQE](examples/vqe-baihua-sim.html)、[QAOA](examples/qaoa-baihua-sim.html)。
 
 ## 仓库结构
 
@@ -87,7 +87,7 @@ Claude Code 里也可以用 `/quafu:quafu` 显式调用。
 skills/quafu/
   SKILL.md                 agent 读的主说明：六步流程
   references/              按需读取：登录、写线路、等结果、解读结果、可视化、SDK 速查、算法实测
-  scripts/qf.py            助手命令：list / show / devices / run / wait / runs / analyze / page
+  scripts/qf.py            助手命令：list / show / devices / run / wait / runs / analyze / page（单次或 2–3 次对比）
   scripts/algorithms.py    内置模板（线路 + 预期）
   scripts/qfsim.py         标准库写的小型理想模拟器，算「理想应该是什么」
   assets/pages/            两个自包含的结果网页参考实现（仪器面板 aurora、纸面 paper）

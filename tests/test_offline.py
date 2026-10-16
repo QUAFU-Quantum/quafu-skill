@@ -67,6 +67,25 @@ class Templates(unittest.TestCase):
             self.assertGreater(out['metrics']['fidelity'], 0.999, name)
 
 
+class Ledger(unittest.TestCase):
+    def test_runs_listing_never_rewrites_records(self):
+        import tempfile
+        import contextlib
+        import io
+        d = tempfile.mkdtemp()
+        rec = {'job_id': 'j1', 'template': 'bell', 'status': 'Finished', 'results': []}
+        json.dump(rec, open(os.path.join(d, 'j1.json'), 'w'))
+        json.dump({'job_id': 'j1', 'items': []}, open(os.path.join(d, 'j1.analysis.json'), 'w'))
+        os.environ['QUAFU_RUNS_DIR'] = d
+        try:
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                qf.main(['runs'])
+        finally:
+            del os.environ['QUAFU_RUNS_DIR']
+        self.assertEqual(out.getvalue().count('j1'), 1)
+        self.assertEqual(json.load(open(os.path.join(d, 'j1.json'))), rec)
+
+
 class Packaging(unittest.TestCase):
     def test_pages_have_placeholder_and_no_external_resources(self):
         d = os.path.join(SKILL, 'assets', 'pages')

@@ -10,6 +10,7 @@
     python qf.py runs                                  本目录下记过的任务组和状态（新会话从这里接着取）
     python qf.py analyze <任务组号>                    和理想结果对比，打印人话总结
     python qf.py page <任务组号> [--template 文件]     生成结果网页并用本地浏览器打开
+    python qf.py page <号1> <号2> [<号3>]              同一模板的几次运行（模拟器/带噪/真机）放一页对比
 
 除 list / show 外都要装 quafu-sdk（pip install quafu-sdk）。记账目录默认是当前目录下的 quafu-runs/，
 可用环境变量 QUAFU_RUNS_DIR 改。
@@ -386,7 +387,7 @@ def analyze_record(rec):
         a_ = my + b * mc
         out['metrics'] = {'points': pts, 'contrast': 2 * b, 'offset': a_, 'p1_at_0': a_ - b, 'p1_at_pi': a_ + b}
         out['summary'].append('理想曲线从 0 升到 1；拟合到的实测曲线从 %s 升到 %s，「振幅」（对比度）%.2f，理想是 1。' % (
-            _pct(a_ - b), _pct(a_ + b), 2 * b))
+            _pct(max(0.0, a_ - b)), _pct(min(1.0, a_ + b)), 2 * b))
         if 2 * b < 0.95:
             out['summary'].append('两端够不着 0 和 1，主要是读出误差和比特能量弛豫；曲线形状（正弦）是对的，说明旋转本身准确。')
         else:
@@ -521,10 +522,17 @@ def open_in_browser(path):
 
 
 def cmd_page(a):
-    rec = load(a.job_id)
-    if rec is None or not rec.get('results'):
-        sys.exit('本地还没有这个任务组的结果。先运行 wait。')
-    data = analyze_record(rec)
+    datas = []
+    for jid in a.job_id:
+        rec = load(jid)
+        if rec is None or not rec.get('results'):
+            sys.exit('本地还没有任务组 %s 的结果。先运行 wait。' % jid)
+        datas.append(analyze_record(rec))
+    if len({d['template'] for d in datas}) > 1:
+        sys.exit('对比页只能放同一个模板的多次运行（比如模拟器 vs 带噪模拟 vs 真机）。')
+    if len(datas) > 3:
+        sys.exit('对比页最多放 3 次运行。')
+    data = datas[0] if len(datas) == 1 else {'runs': datas}
     tpl = a.template or os.path.join(PAGES, 'aurora.html')
     with open(tpl, encoding='utf-8') as f:
         html = f.read()
@@ -532,7 +540,7 @@ def cmd_page(a):
     if marker not in html:
         sys.exit('模板里没有数据占位符 %s' % marker)
     html = html.replace(marker, json.dumps(data, ensure_ascii=False).replace('</', '<\\/'))
-    out = a.out or os.path.join(runs_dir(), '%s.html' % a.job_id)
+    out = a.out or os.path.join(runs_dir(), '%s.html' % '_vs_'.join(a.job_id))
     with open(out, 'w', encoding='utf-8') as f:
         f.write(html)
     print('网页：%s' % os.path.abspath(out))
@@ -573,7 +581,7 @@ def main(argv=None):
     s.add_argument('--json', action='store_true')
     s.set_defaults(func=cmd_analyze)
     s = sub.add_parser('page')
-    s.add_argument('job_id')
+    s.add_argument('job_id', nargs='+', help='一个任务组号；给 2–3 个同模板的号就生成对比页')
     s.add_argument('--template', help='网页模板（含 /*QUAFU_DATA*/null 占位符）')
     s.add_argument('--out')
     s.add_argument('--no-open', action='store_true')

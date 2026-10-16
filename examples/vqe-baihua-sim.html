@@ -4,18 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QUAFU 运行结果</title>
-<!-- 参考实现：深浅两色自适应的「仪器面板」风格。自包含、离线可开，不加载任何外部资源；数据由 qf.py page 填进 QUAFU_DATA 占位符。风格随便改。 -->
+<!-- 参考实现：深浅两色自适应的「仪器面板」风格。自包含、离线可开，不加载任何外部资源；数据由 qf.py page 填进 QUAFU_DATA 占位符（一次运行，或 runs 数组做对比）。风格随便改。 -->
 <style>
 :root{
+  --s1:#5b5bd6;--s2:#e8590c;--s3:#0ca678;
   --bg:#f4f5fb;--surface:#ffffff;--ink:#141726;--ink-2:#454b66;--muted:#7a809c;--line:#e3e6f2;
   --meas:#5b5bd6;--ideal:#9aa0bd;--fit:#5b5bd6;--exact:#d9480f;--cell:#5b5bd6;--glow:rgba(91,91,214,.18);
   --radius:18px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --s1:#7b7bff;--s2:#e8690f;--s3:#14a37f;
   --bg:#090b16;--surface:#11152a;--ink:#eef0ff;--ink-2:#b9bedb;--muted:#7d84a8;--line:#232947;
   --meas:#8b8bff;--ideal:#5d6489;--fit:#8b8bff;--exact:#ff8a4c;--cell:#8b8bff;--glow:rgba(139,139,255,.22);
 }}
 :root[data-theme="dark"]{
+  --s1:#7b7bff;--s2:#e8690f;--s3:#14a37f;
   --bg:#090b16;--surface:#11152a;--ink:#eef0ff;--ink-2:#b9bedb;--muted:#7d84a8;--line:#232947;
   --meas:#8b8bff;--ideal:#5d6489;--fit:#8b8bff;--exact:#ff8a4c;--cell:#8b8bff;--glow:rgba(139,139,255,.22);
 }
@@ -72,6 +75,13 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
 .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:28px}
 .tip{position:fixed;left:0;top:0;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--ink);color:var(--surface);
   padding:8px 12px;border-radius:10px;font-size:13px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:9}
+
+.s1{fill:var(--s1)}.s2{fill:var(--s2)}.s3{fill:var(--s3)}
+.line-s1,.line-s2,.line-s3{fill:none;stroke-width:2}.line-s1{stroke:var(--s1)}.line-s2{stroke:var(--s2)}.line-s3{stroke:var(--s3)}
+.dot-s1{fill:var(--s1)}.dot-s2{fill:var(--s2)}.dot-s3{fill:var(--s3)}
+.dot-s1,.dot-s2,.dot-s3{stroke:var(--surface);stroke-width:2}
+.sw-s1{background:var(--s1)}.sw-s2{background:var(--s2)}.sw-s3{background:var(--s3)}
+.c-s1{color:var(--s1)}.c-s2{color:var(--s2)}.c-s3{color:var(--s3)}
 </style>
 </head>
 <body>
@@ -135,6 +145,8 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
     return e;
   }
   if (!D) { $('#title').textContent = '没有数据：用 qf.py page 生成这个页面'; return; }
+  var RUNS = D.runs || null;          // 多次运行对比：qf.py page 号1 号2 …
+  if (RUNS) D = RUNS[0];
 
   // ── 提示框 ───────────────────────────────────────────
   var tip = h('div', 'tip', null, document.body);
@@ -152,6 +164,7 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
     node.style.cursor = 'default';
   }
 
+  if (!RUNS) {
   // ── 头部与大数字 ─────────────────────────────────────
   var real = !/sim/.test(String(D.target));
   $('#title').textContent = D.title || D.template;
@@ -190,6 +203,8 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
   var ul = $('#summary');
   (D.summary || []).forEach(function (s) { h('li', null, s, ul); });
 
+  }
+
   // ── 画图工具 ─────────────────────────────────────────
   function frame(host, H) {
     host.innerHTML = '';
@@ -220,8 +235,14 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
   }
 
   // 分布柱状图：理想（空心框）对实测（实心）
-  function bars(host, ideal, meas, counts) {
-    var keys = Object.keys(Object.assign({}, ideal, meas)).sort();
+  function bars(host, ideal, meas, counts, extra) {
+    // extra：对比模式下的多组实测 [{dist, counts, cls, name}]；单次运行时为空
+    var series = extra || [{ dist: meas, counts: counts, cls: 'meas', name: '实测' }];
+    var all = Object.assign({}, ideal); series.forEach(function (sr) { Object.assign(all, sr.dist); });
+    meas = {}; Object.keys(all).forEach(function (k) {
+      meas[k] = Math.max.apply(null, series.map(function (sr) { return sr.dist[k] || 0; }));
+    });
+    var keys = Object.keys(all).sort();
     if (keys.length > 16) {
       keys.sort(function (a, b) { return (meas[b] || 0) + (ideal[b] || 0) - (meas[a] || 0) - (ideal[a] || 0); });
       keys = keys.slice(0, 16).sort();
@@ -233,19 +254,23 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
     var y = lin(0, vmax, F.H - B, T), band = (F.W - L - R) / keys.length;
     var ticks = []; for (var t = 0; t <= vmax + 1e-9; t += vmax > 0.5 ? 0.25 : 0.1) ticks.push(t);
     axisY(g, y, L, F.W - R, ticks, function (t) { return Math.round(t * 100) + '%'; });
-    var bw = Math.min(36, band * 0.36);
+    var nb = series.length + 1, bw = Math.min(36, band * 0.72 / nb);
     keys.forEach(function (k, i) {
-      var cx = L + band * (i + 0.5), pi = ideal[k] || 0, pm = meas[k] || 0;
-      var base = F.H - B;
-      if (pi > 0) el('rect', { x: cx - bw - 1, y: y(pi), width: bw, height: Math.max(0.5, base - y(pi)), rx: 3, 'class': 'ideal' }, g);
-      if (pm > 0) el('rect', { x: cx + 1, y: y(pm), width: bw, height: Math.max(0.5, base - y(pm)), rx: 3, 'class': 'meas' }, g);
+      var cx = L + band * (i + 0.5), pi = ideal[k] || 0;
+      var base = F.H - B, x0 = cx - nb * (bw + 2) / 2;
+      if (pi > 0) el('rect', { x: x0, y: y(pi), width: bw, height: Math.max(0.5, base - y(pi)), rx: 3, 'class': 'ideal' }, g);
+      series.forEach(function (sr, j) {
+        var pm = sr.dist[k] || 0;
+        if (pm > 0) el('rect', { x: x0 + (j + 1) * (bw + 2), y: y(pm), width: bw, height: Math.max(0.5, base - y(pm)), rx: 3, 'class': sr.cls }, g);
+      });
       var lab = narrow
         ? el('text', { x: cx + 4, y: F.H - B + 10, 'text-anchor': 'end', transform: 'rotate(-90 ' + (cx + 4) + ' ' + (F.H - B + 10) + ')', 'class': 'tick mono' }, g)
         : el('text', { x: cx, y: F.H - 12, 'text-anchor': 'middle', 'class': 'tick mono' }, g);
       lab.textContent = k;
       var hit = el('rect', { x: cx - band / 2, y: T, width: band, height: base - T, 'class': 'hit' }, g);
-      hover(hit, '<b class="mono">' + k + '</b><br>理想 ' + pct(pi) + '<br>实测 ' + pct(pm) +
-        (counts && counts[k] != null ? '（' + counts[k] + ' 次）' : ''));
+      hover(hit, '<b class="mono">' + k + '</b><br>理想 ' + pct(pi) + series.map(function (sr) {
+        return '<br>' + sr.name + ' ' + pct(sr.dist[k] || 0) + (sr.counts && sr.counts[k] != null ? '（' + sr.counts[k] + ' 次）' : '');
+      }).join(''));
     });
     el('line', { x1: L, x2: F.W - R, y1: F.H - B, y2: F.H - B, 'class': 'axis' }, g);
   }
@@ -274,7 +299,7 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
       el('path', { d: d, 'class': ln.cls }, g);
     });
     (opts.points || []).forEach(function (p) {
-      el('circle', { cx: x(p.x), cy: y(p.y), r: 5, 'class': 'dot' }, g);
+      el('circle', { cx: x(p.x), cy: y(p.y), r: 5, 'class': p.cls || 'dot' }, g);
       var hit = el('circle', { cx: x(p.x), cy: y(p.y), r: 14, 'class': 'hit' }, g);
       hover(hit, p.tip);
     });
@@ -327,6 +352,81 @@ pre{font:13px/1.5 "JetBrains Mono",Consolas,monospace;overflow:auto;margin:12px 
       tx.textContent = 'β ' + v.toFixed(2);
     });
   }
+
+
+  // ── 多次运行对比 ─────────────────────────────────────
+  function compareMode() {
+    var SC = ['s1', 's2', 's3'];
+    var name = function (r) { return (/sim/.test(String(r.target)) ? '' : '真机 ') + (r.backend || r.target); };
+    $('#title').textContent = (D.title || D.template) + '：对比';
+    $('#eyebrow').textContent = RUNS.length + ' 次运行 · ' + RUNS.map(name).join(' / ');
+    var hero = $('#hero');
+    RUNS.forEach(function (r, i) {
+      var m = r.metrics || {}, v, lab;
+      if (r.kind === 'rotation') { v = m.contrast != null ? m.contrast.toFixed(2) : '—'; lab = '对比度（理想 1.00）'; }
+      else if (r.kind === 'vqe') { v = m.fit ? m.fit.min.toFixed(4) : '—'; lab = '最低能量 Ha（精确 ' + m.exact.toFixed(4) + '）'; }
+      else if (r.kind === 'qaoa') { v = m.best ? m.best.cut.toFixed(2) : '—'; lab = '最好平均割值（最优 4）'; }
+      else { v = m.good_mass != null ? pct(m.good_mass) : (m.fidelity != null ? m.fidelity.toFixed(3) : '—'); lab = m.good_mass != null ? '落在理想结果上' : '与理想的相似度'; }
+      var c = h('div', 'stat', null, hero);
+      var t = h('div', 'stat-value', v, c); t.classList.add('c-' + SC[i % 3]);
+      h('div', 'stat-label', lab, c);
+      var sub = h('div', 'stat-sub', null, c); h('i', 'sw sw-' + SC[i % 3], null, sub); sub.appendChild(document.createTextNode(' ' + name(r)));
+    });
+    var ul = $('#summary');
+    RUNS.forEach(function (r) {
+      var li = h('li', null, null, ul); h('b', null, name(r) + '：', li);
+      li.appendChild(document.createTextNode((r.summary || []).slice(0, 3).join(' ')));
+    });
+    var dl = $('#meta');
+    RUNS.forEach(function (r) {
+      h('dt', null, name(r), dl);
+      h('dd', null, (r.job_id || '') + ' · ' + (r.shots || '') + ' 次 · ' + (r.finished_at || '').replace('T', ' ').slice(0, 16), dl);
+    });
+    var main = $('#chart');
+    var items = RUNS.map(function (r) { return (r.items || []).filter(function (it) { return it.measured && Object.keys(it.measured).length; }); });
+    var leg = [{ cls: 'sw-ideal', text: '理想' }].concat(RUNS.map(function (r, i) { return { cls: 'sw-' + SC[i % 3], text: name(r) }; }));
+    function drawCmp() {
+      hideTip();
+      var k = D.kind;
+      if (k === 'rotation' || k === 'vqe') {
+        var lines = [], pts = [], ys = [];
+        RUNS.forEach(function (r, i) {
+          var m = r.metrics || {}, P = k === 'rotation' ? (m.points || []).map(function (p) { return { x: p.theta, y: p.p1, i: p.ideal }; })
+            : (m.curve || []).map(function (p) { return { x: p.theta, y: p.energy, i: p.ideal }; });
+          var f = fitSin(P.map(function (p) { return p.x; }), P.map(function (p) { return p.y; }));
+          if (f) lines.push({ cls: 'line-' + SC[i % 3], f: f });
+          if (i === 0) { var fi = fitSin(P.map(function (p) { return p.x; }), P.map(function (p) { return p.i; })); if (fi) lines.unshift({ cls: 'line-ideal', f: fi }); }
+          P.forEach(function (p) { ys.push(p.y, p.i); pts.push({ x: p.x, y: p.y, cls: 'dot-' + SC[i % 3], tip: name(r) + '<br>θ = ' + p.x.toFixed(2) + '<br>实测 ' + (k === 'rotation' ? pct(p.y) : p.y.toFixed(4) + ' Ha') + '<br>理想 ' + (k === 'rotation' ? pct(p.i) : p.i.toFixed(4) + ' Ha') }); });
+        });
+        if (k === 'rotation') {
+          $('#chart-title').textContent = '转的角度 θ 与测到 1 的概率';
+          curve(main, { x0: 0, x1: Math.PI, y0: 0, y1: 1, yticks: [0, .25, .5, .75, 1], yfmt: function (t) { return Math.round(t * 100) + '%'; },
+            xticks: [0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4, Math.PI], lines: lines, points: pts });
+        } else {
+          var ex = D.metrics.exact, y0 = Math.floor(Math.min.apply(null, ys.concat([ex])) * 5) / 5, y1 = Math.ceil(Math.max.apply(null, ys) * 5) / 5, tk = [];
+          for (var t = y0; t <= y1 + 1e-9; t += 0.2) tk.push(t);
+          $('#chart-title').textContent = '试探态角度 θ 与氢分子能量';
+          curve(main, { x0: 0, x1: 2 * Math.PI, y0: y0, y1: y1, yticks: tk, yfmt: function (t) { return (Math.abs(t) < 1e-9 ? 0 : t).toFixed(1); },
+            xticks: [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2, 2 * Math.PI], hlines: [{ v: ex, cls: 'line-exact', text: '精确基态 ' + ex.toFixed(4) + ' Ha' }],
+            lines: lines, points: pts });
+        }
+      } else if (k === 'qaoa') {
+        $('#chart-title').textContent = '最好那组角度下，每种分法出现的概率';
+        var bests = RUNS.map(function (r, i) {
+          var b = r.metrics.best; return items[i].filter(function (it) { return it.label.gamma === b.gamma && it.label.beta === b.beta; })[0];
+        });
+        bars(main, bests[0].ideal, null, null, bests.map(function (it, i) { return { dist: it.measured, counts: it.counts, cls: SC[i % 3], name: name(RUNS[i]) }; }));
+      } else {
+        $('#chart-title').textContent = '每种结果出现的概率：理想 vs 各次实测';
+        bars(main, items[0][0].ideal || {}, null, null, items.map(function (its, i) { return { dist: its[0].measured, counts: its[0].counts, cls: SC[i % 3], name: name(RUNS[i]) }; }));
+      }
+    }
+    legend(main, D.kind === 'rotation' || D.kind === 'vqe' ? [{ cls: 'sw-ideal-line', text: '理想' }].concat(leg.slice(1)) : leg);
+    drawCmp();
+    var rt; addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawCmp, 120); });
+    var raw = $('#raw'); if (raw) raw.closest('details').hidden = true;
+  }
+  if (RUNS) { compareMode(); return; }
 
   // ── 按类型出图 ───────────────────────────────────────
   var main = $('#chart'), second = $('#chart2');
