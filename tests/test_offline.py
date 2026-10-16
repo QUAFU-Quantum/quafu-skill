@@ -109,6 +109,19 @@ class Packaging(unittest.TestCase):
         for f in ('marketplace.json', 'plugin.json'):
             json.load(open(os.path.join(ROOT, '.claude-plugin', f), encoding='utf-8'))
 
+    def test_workbuddy_package(self):
+        import tempfile
+        import zipfile
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import build_workbuddy as W
+        out = os.path.join(tempfile.mkdtemp(), 'quafu.zip')
+        W.build(out, 'QUAFU-Quantum')
+        self.assertEqual(W.verify(out), [])
+        head = zipfile.ZipFile(out).read('quafu/SKILL.md').decode('utf-8').split('\n---\n')[0]
+        version = json.load(open(os.path.join(ROOT, '.claude-plugin', 'plugin.json')))['version']
+        self.assertIn('\nversion: %s\n' % version, head + '\n')
+        self.assertTrue(W.check_frontmatter('---\ndescription: a: b\n---\n'))
+
 
 if __name__ == '__main__':
     unittest.main()

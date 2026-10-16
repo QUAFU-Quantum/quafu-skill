@@ -95,7 +95,8 @@ skills/quafu/
 examples/                  用真实运行数据生成的结果网页
 tests/test_offline.py      不联网的检查
 tests/e2e.py               在 QUAFU 上真跑全部模板
-docs/                      国产平台接入调研
+tools/build_workbuddy.py   打 WorkBuddy 上架包 dist/workbuddy/quafu.zip
+docs/                      国产平台接入调研、上架 WorkBuddy 指南
 ```
 
 ## 开发
@@ -105,9 +106,10 @@ python -m unittest discover tests                    # 不联网
 python tests/e2e.py --target sim                     # 真跑（需已登录 QUAFU）
 python tests/e2e.py --target Shenglian bell          # 真机只挑一两个
 claude plugin validate .                             # 插件清单
+python3 tools/build_workbuddy.py                     # WorkBuddy 上架包（附在每个 Release 上）
 ```
 
-改了模板或分析逻辑，就重跑 e2e 并更新 `references/algorithms.md` 里的实测数字。每次发布改动都要把 `.claude-plugin/plugin.json` 的 `version` 加一——Claude Code 和 Codex 按版本号判断要不要更新，版本号不变，用户那边的 `plugin update` 不会拿到新内容。不要在任何文件里写凭证。
+改了模板或分析逻辑，就重跑 e2e 并更新 `references/algorithms.md` 里的实测数字。每次发布改动都要把 `.claude-plugin/plugin.json` 的 `version` 加一（它是唯一写版本号的地方，WorkBuddy 包也从这里取）——Claude Code 和 Codex 按版本号判断要不要更新，版本号不变，用户那边的 `plugin update` 不会拿到新内容。不要在任何文件里写凭证。
 
 ## 许可
 
