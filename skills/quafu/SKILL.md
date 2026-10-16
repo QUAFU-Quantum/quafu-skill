@@ -92,7 +92,7 @@ python "$SKILL_DIR/scripts/qf.py"      # Windows 上 python 可能叫 py
 
 `qf wait` 没等到会以**退出码 3** 结束，并打印完成了几条——这不是错误，任务还在平台上。累计等了半小时还没好，或用户不想等：告诉用户任务组号和「之后回来说『取一下 QUAFU 结果』就行」，结束等待。支持后台任务的工具（如 Claude Code）可以把 `qf wait <号> --budget 7200` 放后台，完成后再分析。
 
-**新会话里接着取**：在同一个目录运行 `qf runs --refresh`，列出所有记过的任务组和状态，挑没取的 `qf wait`。用户只给了任务组号也行，`qf wait <号>` 照样能取（没有本地记录时只做通用分析）。
+**新会话里接着取**：先确认第 1 步的环境（`--refresh` 要联网、要装好 SDK），然后在当初提交的目录运行 `qf runs --refresh`，列出所有记过的任务组和状态，挑没取的 `qf wait`。用户只给了任务组号也行，`qf wait <号>` 照样能取（没有本地记录时只做通用分析）。
 
 失败、超时、额度、被取消怎么处理见 [references/waiting.md](references/waiting.md)。
 
